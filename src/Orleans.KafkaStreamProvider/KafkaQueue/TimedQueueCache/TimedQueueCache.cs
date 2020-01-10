@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Metrics;
+using Microsoft.Extensions.Logging;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Streams;
@@ -71,7 +72,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
     public class TimedQueueCache : IQueueCache
     {
         private readonly LinkedList<TimedQueueCacheItem> _cachedMessages;
-        private readonly Logger _logger;
+        private readonly ILogger _logger;
         private readonly List<TimedQueueCacheBucket> _cacheCursorHistogram; // for backpressure detection
         private readonly int _maxCacheSize;
         private readonly int _cacheHistogramMaxBucketSize;
@@ -95,11 +96,11 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
 
         internal TimedQueueCacheItem LastItem => _cachedMessages.Last.Value;
 
-        public TimedQueueCache(QueueId queueId, TimeSpan cacheTimespan, int cacheSize, int numOfBuckets, Logger logger)
+        public TimedQueueCache(QueueId queueId, TimeSpan cacheTimespan, int cacheSize, int numOfBuckets, ILogger logger)
         {
-            _counterMessagesInCache = Metric.Context("KafkaStreamProvider").Counter($"Messages In Cache queueId:({queueId.GetNumericId()})", Unit.Items);
-            _meterCacheEvacuationsPerSecond = Metric.Context("KafkaStreamProvider").Meter($"Cache Evacuations Per Second queueId:({queueId.GetNumericId()})", Unit.Items);
-            _counterNumberOfCursorsCausingPressure = Metric.Context("KafkaStreamProvider").Counter($"Cursors causing pressure queueId:({queueId.GetNumericId()})", Unit.Items);
+            _counterMessagesInCache = Metrics.Metric.Context("KafkaStreamProvider").Counter($"Messages In Cache queueId:({queueId.GetNumericId()})", Unit.Items);
+            _meterCacheEvacuationsPerSecond = Metrics.Metric.Context("KafkaStreamProvider").Meter($"Cache Evacuations Per Second queueId:({queueId.GetNumericId()})", Unit.Items);
+            _counterNumberOfCursorsCausingPressure = Metrics.Metric.Context("KafkaStreamProvider").Counter($"Cursors causing pressure queueId:({queueId.GetNumericId()})", Unit.Items);
 
             Id = queueId;
             _cachedMessages = new LinkedList<TimedQueueCacheItem>();
@@ -245,9 +246,9 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
             // if offset is not set, iterate from newest (first) message in cache, but not 
             // including the first message itself
             if (sequenceToken == null)
-            {
+            {                
                 LinkedListNode<TimedQueueCacheItem> firstMessage = _cachedMessages.First;
-                ResetCursor(cursor, ((EventSequenceToken)firstMessage.Value.SequenceToken).NextSequenceNumber());
+                ResetCursor(cursor, firstMessage.Value.SequenceToken);
                 return;
             }
 
@@ -349,7 +350,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
                 Log(_logger, "TimedQueueCache for QueueId:{0}, TryGetNextMessage: reached end of cache, resetting the cursor to a future token.", Id.ToString());
 
                 // If we are at the end of the cache unset cursor and move offset one forward
-                ResetCursor(cursor, ((EventSequenceToken)cursor.SequenceToken).NextSequenceNumber());
+                ResetCursor(cursor, cursor.SequenceToken);
             }
             else // move to next
             {
@@ -520,9 +521,9 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
             return cacheBucket;
         }
 
-        internal static void Log(Logger logger, string format, params object[] args)
+        internal static void Log(ILogger logger, string format, params object[] args)
         {
-            logger.Verbose(format, args);
+            logger.Info(format, args);
         }
 
         public bool TryPurgeFromCache(out IList<IBatchContainer> purgedItems)

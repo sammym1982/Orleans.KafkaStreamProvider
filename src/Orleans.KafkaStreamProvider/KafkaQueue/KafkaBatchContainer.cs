@@ -22,11 +22,11 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
 
         public string StreamNamespace { get; }
 
-        public StreamSequenceToken SequenceToken => _sequenceToken;
+        public StreamSequenceToken SequenceToken { get; set; }
 
         public string Timestamp { get; private set; }
 
-        private KafkaBatchContainer(Guid streamId, string streamNamespace, List<object> events, Dictionary<string, object> requestContext)
+        public KafkaBatchContainer(Guid streamId, string streamNamespace, List<object> events, Dictionary<string, object> requestContext)
         {
             if (events == null) throw new ArgumentNullException(nameof(events), "Message contains no events");
 
@@ -37,7 +37,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
             Timestamp = DateTime.UtcNow.ToString("O");
         }
 
-        private KafkaBatchContainer(Guid streamId, string streamNamespace, object singleEvent, Dictionary<string, object> requestContext)
+        public KafkaBatchContainer(Guid streamId, string streamNamespace, object singleEvent, Dictionary<string, object> requestContext)
         {
             if (singleEvent == null) throw new ArgumentNullException(nameof(singleEvent));
 
@@ -64,37 +64,11 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
             return _events.Any(item => shouldReceiveFunc(stream, filterData, item));
         }
 
-        internal static Message ToKafkaMessage<T>(Guid streamId, string streamNamespace, IEnumerable<T> events, Dictionary<string, object> requestContext)
-        {
-            KafkaBatchContainer container = new KafkaBatchContainer(streamId, streamNamespace, events.Cast<object>().ToList(), requestContext);
-            var rawBytes = SerializationManager.SerializeToByteArray(container);
-            Message message = new Message(){ Value = rawBytes };
-
-            return message;
-        }
-
-        internal static Message ToKafkaMessage<T>(Guid streamId, string streamNamespace, T singleEvent, Dictionary<string, object> requestContext)
-        {
-            KafkaBatchContainer container = new KafkaBatchContainer(streamId, streamNamespace, singleEvent, requestContext);
-            var rawBytes = SerializationManager.SerializeToByteArray(container);
-            Message message = new Message() { Value = rawBytes };
-
-            return message;
-        }
-
-        internal static KafkaBatchContainer FromKafkaMessage(Message message, long sequenceId)
-        {
-            var kafkaBatch = SerializationManager.DeserializeFromByteArray<KafkaBatchContainer>(message.Value);
-            kafkaBatch._sequenceToken = new EventSequenceToken(sequenceId);
-
-            return kafkaBatch;
-        }
-
         public bool ImportRequestContext()
         {
             if (_requestContext != null)
-            {                
-                RequestContext.Import(_requestContext);
+            {
+                RequestContextExtensions.Import(_requestContext);
                 return true;
             }
             return false;

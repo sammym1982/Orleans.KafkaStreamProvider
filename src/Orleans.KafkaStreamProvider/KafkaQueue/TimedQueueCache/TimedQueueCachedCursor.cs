@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -14,7 +15,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
         private readonly Guid _streamGuid;
         private readonly string _streamNamespace;
         private readonly TimedQueueCache _cache;
-        private readonly Logger _logger;
+        private readonly ILogger _logger;
         private IBatchContainer _current; // this is a pointer to the current element in the cache. It is what will be returned by GetCurrent().
 
         // This is a pointer to the NEXT element in the cache.
@@ -38,7 +39,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
             SequenceToken = item.Value.SequenceToken;
         }
 
-        public TimedQueueCacheCursor(TimedQueueCache cache, Guid streamGuid, string streamNamespace, Logger logger)
+        public TimedQueueCacheCursor(TimedQueueCache cache, Guid streamGuid, string streamNamespace, ILogger logger)
         {
             if (cache == null)
             {
@@ -105,7 +106,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache
                 NextElement != null ? NextElement.Value.Batch.ToString() : "null", SequenceToken?.ToString() ?? "null");
         }
 
-        public void Refresh()
+        public void Refresh(StreamSequenceToken token)
         {
             if (!IsSet)
             {

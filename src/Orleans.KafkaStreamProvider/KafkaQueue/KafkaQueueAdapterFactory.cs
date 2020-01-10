@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Metrics;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Orleans.KafkaStreamProvider.KafkaQueue.TimedQueueCache;
 using Orleans.Providers;
 using Orleans.Runtime;
@@ -17,10 +19,11 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
         private HashRingBasedStreamQueueMapper _streamQueueMapper;
         private IQueueAdapterCache _adapterCache;
         private string _providerName;
-        private Logger _logger;
+        private ILogger _logger;
+        private Func<KafkaDataAdapter> _dataAdapterFactory;
         private KafkaQueueAdapter _adapter;        
 
-        public void Init(IProviderConfiguration config, string providerName, Logger logger, IServiceProvider serviceProvider)
+        public void Init(IProviderConfiguration config, string providerName, ILogger logger, IServiceProvider serviceProvider)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             if (logger == null) throw new ArgumentNullException(nameof(logger));
@@ -31,18 +34,22 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
 
             if (!_options.UsingExternalMetrics)
             {
-                Metric.Config.WithHttpEndpoint($"http://localhost:{_options.MetricsPort}/");
+                Metrics.Metric.Config.WithHttpEndpoint($"http://localhost:{_options.MetricsPort}/");
             }
 
             if (!_options.IncludeMetrics)
             {
-                Metric.Context("KafkaStreamProvider").Advanced.CompletelyDisableMetrics();
+                Metrics.Metric.Context("KafkaStreamProvider").Advanced.CompletelyDisableMetrics();
             }
 
             _providerName = providerName;
-            _streamQueueMapper = new HashRingBasedStreamQueueMapper(_options.NumOfQueues, providerName);
+            _streamQueueMapper = new HashRingBasedStreamQueueMapper(new Configuration.HashRingStreamQueueMapperOptions
+            {
+                TotalQueueCount = _options.NumOfQueues
+            }, providerName);
             _logger = logger;
-            _adapter = new KafkaQueueAdapter(_streamQueueMapper, _options, providerName, new KafkaBatchFactory(), _logger);
+            _dataAdapterFactory = () => ActivatorUtilities.GetServiceOrCreateInstance<KafkaDataAdapter>(serviceProvider);
+            _adapter = new KafkaQueueAdapter(_streamQueueMapper, _options, providerName, new KafkaBatchFactory(_dataAdapterFactory()), _logger);
             _adapterCache = new TimedQueueAdapterCache(this, TimeSpan.FromSeconds(_options.CacheTimespanInSeconds), _options.CacheSize, _options.CacheNumOfBuckets, logger);
         }
 
@@ -50,8 +57,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
         {
             if (_adapter == null)
             {
-                _adapter = new KafkaQueueAdapter(_streamQueueMapper, _options, _providerName,
-                    new KafkaBatchFactory(), _logger);
+                _adapter = new KafkaQueueAdapter(_streamQueueMapper, _options, _providerName, new KafkaBatchFactory(_dataAdapterFactory()), _logger);
             }
 
             return Task.FromResult<IQueueAdapter>(_adapter);

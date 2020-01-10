@@ -1,5 +1,6 @@
 ﻿using System;
 using KafkaNet;
+using Microsoft.Extensions.Logging;
 using Orleans.Runtime;
 
 namespace Orleans.KafkaStreamProvider
@@ -19,9 +20,9 @@ namespace Orleans.KafkaStreamProvider
     /// </summary>
     internal class KafkaLogBridge : IKafkaLog
     {
-        private readonly Logger _orleansLogger;
+        private readonly ILogger _orleansLogger;
 
-        public KafkaLogBridge(Logger orleansLogger)
+        public KafkaLogBridge(ILogger orleansLogger)
         {
             if (orleansLogger == null) throw new ArgumentNullException(nameof(orleansLogger));
 
@@ -30,7 +31,7 @@ namespace Orleans.KafkaStreamProvider
 
         public void DebugFormat(string format, params object[] args)
         {
-            _orleansLogger.Verbose((int)KafkaErrorCodes.KafkaApplicationDebugInfo, format, args);
+            _orleansLogger.Info((int)KafkaErrorCodes.KafkaApplicationDebugInfo, format, args);
         }
 
         public void ErrorFormat(string format, params object[] args)

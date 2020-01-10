@@ -6,6 +6,7 @@ using KafkaNet;
 using KafkaNet.Model;
 using KafkaNet.Protocol;
 using Metrics;
+using Microsoft.Extensions.Logging;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -16,14 +17,14 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
         private readonly HashRingBasedStreamQueueMapper _streamQueueMapper;
         private readonly ProtocolGateway _gateway;
         private readonly IKafkaBatchFactory _batchFactory;
-        private readonly Logger _logger;
+        private readonly ILogger _logger;
         private readonly KafkaStreamProviderOptions _options;
         private readonly Producer _producer;
 
         // Metrics
-        private static readonly Meter MeterProducedMessagesPerSecond = Metric.Context("KafkaStreamProvider").Meter("Produced Messages Per Second", Unit.Events);
-        private static readonly Histogram HistogramProducedMessageBatchSize = Metric.Context("KafkaStreamProvider").Histogram("Produced Message Batch Size", Unit.Events);
-        private static readonly Timer TimerTimeToProduceMessage = Metric.Context("KafkaStreamProvider").Timer("Time To Produce Message", Unit.Custom("Produces"));
+        private static readonly Meter MeterProducedMessagesPerSecond = Metrics.Metric.Context("KafkaStreamProvider").Meter("Produced Messages Per Second", Unit.Events);
+        private static readonly Histogram HistogramProducedMessageBatchSize = Metrics.Metric.Context("KafkaStreamProvider").Histogram("Produced Message Batch Size", Unit.Events);
+        private static readonly Timer TimerTimeToProduceMessage = Metrics.Metric.Context("KafkaStreamProvider").Timer("Time To Produce Message", Unit.Custom("Produces"));
     
         public bool IsRewindable => true;
 
@@ -32,7 +33,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
         public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
 
         public KafkaQueueAdapter(HashRingBasedStreamQueueMapper queueMapper, KafkaStreamProviderOptions options,
-            string providerName, IKafkaBatchFactory batchFactory, Logger logger)
+            string providerName, IKafkaBatchFactory batchFactory, ILogger logger)
         {
             if (options == null) throw new ArgumentNullException(nameof(options));
             if (batchFactory == null) throw new ArgumentNullException(nameof(batchFactory));
@@ -80,7 +81,7 @@ namespace Orleans.KafkaStreamProvider.KafkaQueue
             
             var partitionId = (int)queueId.GetNumericId();
 
-            _logger.Verbose("KafkaQueueAdapter - For StreamId: {0}, StreamNamespace:{1} using partition {2}", streamGuid, streamNamespace, partitionId);
+            _logger.Info("KafkaQueueAdapter - For StreamId: {0}, StreamNamespace:{1} using partition {2}", streamGuid, streamNamespace, partitionId);
 
             var enumeratedEvents = events.ToList();
             var payload = _batchFactory.ToKafkaMessage(streamGuid, streamNamespace, enumeratedEvents.AsEnumerable(), requestContext);            
